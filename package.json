@@ -1,0 +1,19 @@
+{
+  "name": "bestchange-arbitrage-bot",
+  "version": "1.0.0",
+  "description": "Telegram бот по поиску арбитражных сделок между Binance и BestChange",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Ibarakilol",
+  "license": "ISC",
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "axios": "^1.6.7",
+    "telegraf": "^3.38.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.4"
+  }
+}
