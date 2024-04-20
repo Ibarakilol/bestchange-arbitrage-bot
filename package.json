@@ -1,7 +1,7 @@
 {
   "name": "bestchange-arbitrage-bot",
   "version": "1.0.0",
-  "description": "Telegram бот по поиску арбитражных сделок между Binance и BestChange",
+  "description": "Telegram бот по поиску арбитражных сделок между Binance/Bybit и BestChange",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

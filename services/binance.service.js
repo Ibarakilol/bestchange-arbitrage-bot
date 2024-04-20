@@ -3,6 +3,8 @@ const { createHmac } = require('node:crypto');
 require('dotenv').config();
 const axios = require('axios');
 
+const { CURRENCY_LIST } = require('../constants');
+
 class Binance {
   createSignature(data) {
     return createHmac('sha256', process.env.BINANCE_API_SECRET).update(data).digest('hex');
@@ -10,6 +12,30 @@ class Binance {
 
   getSpotTradeLink(currency) {
     return `https://www.binance.com/ru/trade/${currency}_USDT?type=spot`;
+  }
+
+  async getMarketData() {
+    try {
+      const { data: exchangeInfo } = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
+
+      const filteredExchangeInfo = exchangeInfo.symbols
+        .filter((symbolData) => symbolData.status === 'TRADING' && symbolData.quoteAsset === 'USDT')
+        .map((symbolData) => ({ symbol: symbolData.symbol, asset: symbolData.baseAsset }));
+
+      const pairsData = filteredExchangeInfo
+        .filter((data) => CURRENCY_LIST.includes(data.asset))
+        .reduce(
+          (acc, data) => ({
+            ...acc,
+            [data.symbol]: { asset: data.asset, bidPrice: 0, askPrice: 0, spotLink: this.getSpotTradeLink(data.asset) },
+          }),
+          {}
+        );
+
+      return pairsData;
+    } catch (err) {
+      console.log(`Ошибка обработки данных Binance. ${err}`);
+    }
   }
 
   async getCurrenciesFees() {
@@ -23,6 +49,7 @@ class Binance {
           'X-MBX-APIKEY': process.env.BINANCE_API_KEY,
         },
       });
+
       return coinsInfo.reduce((acc, coinInfo) => ({
         ...acc,
         [coinInfo.coin]: coinInfo.networkList

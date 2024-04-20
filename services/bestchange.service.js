@@ -39,10 +39,13 @@ class BestChangeService {
           if (giveId !== getId && giveId in currencies && getId in currencies && exchangeId in exchanges) {
             const tradePair = `${currencies[giveId].currency}${currencies[getId].currency}`;
             const data = {
+              giveCurrencyName: currencies[giveId].name,
+              getCurrencyName: currencies[getId].name,
               exchange: exchanges[exchangeId].name,
               price:
                 parseFloat(splitedLineData[3]) === 1 ? parseFloat(splitedLineData[4]) : parseFloat(splitedLineData[3]),
               minSum: parseFloat(splitedLineData[8]),
+              maxSum: parseFloat(splitedLineData[9]),
               link: this.getExchangeLink(exchangeId, giveId, getId),
             };
 
@@ -88,6 +91,22 @@ class BestChangeService {
       });
     } catch (err) {
       console.log(`Ошибка получения данных BestChange. ${err}`);
+    }
+  }
+
+  parseBestChangeExchanges() {
+    try {
+      const exchangesData = fs.readFileSync(path.resolve(DATA_PATH, 'bm_exch.dat'));
+
+      exchangesData
+        .toString()
+        .split(/\r?\n/)
+        .forEach((lineData) => {
+          const splitedLineData = lineData.split(';');
+          console.log({ id: splitedLineData[0], name: splitedLineData[1] });
+        });
+    } catch (err) {
+      console.log(`Ошибка обработки данных. ${err}`);
     }
   }
 }
