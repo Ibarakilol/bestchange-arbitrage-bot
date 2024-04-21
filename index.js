@@ -7,7 +7,7 @@ const { mapArbitrageToButton } = require('./adapters');
 const { getTimeString, sleep } = require('./utils');
 const { EXCHANGE_NAME } = require('./constants');
 
-const MIN_SPREAD = 0.01;
+const MIN_SPREAD = 0.2;
 const VOLUME = 2000;
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -58,55 +58,115 @@ async function findArbitrages(marketData, feesData) {
     });
 
     Object.keys(marketData[exchange]).forEach((symbol) => {
-      if (marketData[exchange][symbol].bidPrice && marketData[exchange][symbol].askPrice && symbol in bestChangeData) {
+      if (marketData[exchange][symbol].bidPrice && marketData[exchange][symbol].askPrice) {
         const asset = marketData[exchange][symbol].asset;
-        const marketPrice = marketData[exchange][symbol].askPrice;
-        const currencyFees = feesData[exchange]?.[asset];
-        const bestChangeOption = bestChangeData[symbol].sort((prev, next) => (prev.price < next.price ? -1 : 1))[0];
+        const reversedSymbol = `USDT${asset}`;
 
-        let spread = 0;
-        let total = 0;
-        let tradePath = '';
-        let withdrawFees = 0;
-        let withdrawMessage = '';
+        if (symbol in bestChangeData) {
+          const marketPrice = marketData[exchange][symbol].askPrice;
+          const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.withdrawEnable);
+          const bestChangeOption = bestChangeData[symbol].sort((prev, next) => (prev.price < next.price ? -1 : 1))[0];
 
-        if (currencyFees?.length) {
-          const bestFee = currencyFees
-            .filter((currencyFee) => currencyFee.withdrawEnable)
-            .sort((prev, next) => (prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1))[0];
-          withdrawFees = bestFee.fees;
-          withdrawMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
-            bestFee.fees * marketPrice
-          ).toFixed(2)} USDT)${marketData[exchange][symbol].withdrawLink}\n`;
+          let spread = 0;
+          let total = 0;
+          let tradePath = '';
+          let withdrawFees = 0;
+          let withdrawMessage = '';
+
+          if (currencyFees?.length) {
+            const bestFee = currencyFees.sort((prev, next) =>
+              prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
+            )[0];
+            withdrawFees = bestFee.fees;
+            withdrawMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
+              bestFee.fees * marketPrice
+            ).toFixed(2)} USDT)${marketData[exchange][symbol].withdrawLink}\n`;
+          } else {
+            return;
+          }
+
+          spread = 1 / marketPrice;
+          const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
+          total = VOLUME / marketPrice - tradeFeePrice - withdrawFees;
+          tradePath = `Обмен 1 на ${exchangeName}: USDT на ${asset} по ${marketPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n${withdrawMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\n\n`;
+
+          if (bestChangeOption.minSum > total || bestChangeOption.maxSum < total) {
+            return;
+          }
+
+          spread *= 1 / bestChangeOption.price;
+          total = total / bestChangeOption.price;
+          tradePath += `Обмен 2 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${
+            bestChangeOption.getCurrencyName
+          } по ${bestChangeOption.price} (${bestChangeOption.minSum} ${asset}/${(
+            bestChangeOption.minSum / bestChangeOption.price
+          ).toFixed(2)} USDT)\n\n${bestChangeOption.link}\n\n`;
+
+          const arbitrage = {
+            id: `${symbol}-${exchange}-${bestChangeOption.exchange.replace(/-/g, '')}`,
+            symbol,
+            tradePath,
+            exchange: bestChangeOption.exchange,
+            spread: parseFloat(parseFloat((spread - 1) * 100 - 0.1).toFixed(2)),
+            total: total.toFixed(2),
+          };
+
+          arbitrages.push(arbitrage);
         }
 
-        spread = 1 / marketPrice;
-        const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
-        total = VOLUME / marketPrice - tradeFeePrice - withdrawFees;
-        tradePath = `Обмен 1 на ${exchangeName}: USDT на ${asset} по ${marketPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n${withdrawMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\n\n`;
+        if (reversedSymbol in bestChangeData) {
+          const marketPrice = marketData[exchange][symbol].bidPrice;
+          const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.depositEnable);
+          const bestChangeOption = bestChangeData[reversedSymbol].sort((prev, next) =>
+            prev.price > next.price ? -1 : 1
+          )[0];
 
-        if (bestChangeOption.minSum > total || bestChangeOption.maxSum < total) {
-          return;
+          if (bestChangeOption.minSum > VOLUME || bestChangeOption.maxSum < VOLUME) {
+            return;
+          }
+
+          let spread = 0;
+          let total = 0;
+          let tradePath = '';
+          let depositMessage = '';
+
+          if (currencyFees?.length) {
+            const bestFee = currencyFees.sort((prev, next) =>
+              prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
+            )[0];
+            depositMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
+              bestFee.fees * marketPrice
+            ).toFixed(2)} USDT)${marketData[exchange][symbol].depositLink}\n`;
+          } else {
+            return;
+          }
+
+          spread = 1 / bestChangeOption.price;
+          total = VOLUME / bestChangeOption.price;
+          tradePath = `Обмен 1 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${
+            bestChangeOption.getCurrencyName
+          } по ${bestChangeOption.price} (${bestChangeOption.minSum} ${asset}/${(
+            bestChangeOption.minSum / bestChangeOption.price
+          ).toFixed(2)} USDT)\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n\n${
+            bestChangeOption.link
+          }\n\n`;
+
+          spread *= 1 / marketPrice;
+          const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
+          total = total / marketPrice - tradeFeePrice;
+          tradePath += `Обмен 2 на ${exchangeName}: ${asset} на USDT по ${marketPrice}\n${depositMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\n\n`;
+
+          const arbitrage = {
+            id: `${reversedSymbol}-${exchange}-${bestChangeOption.exchange.replace(/-/g, '')}`,
+            symbol,
+            tradePath,
+            exchange: bestChangeOption.exchange,
+            spread: parseFloat(parseFloat((spread - 1) * 100 - 0.1).toFixed(2)),
+            total: total.toFixed(2),
+          };
+
+          arbitrages.push(arbitrage);
         }
-
-        spread *= 1 / bestChangeOption.price;
-        total = total / bestChangeOption.price;
-        tradePath += `Обмен 2 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${
-          bestChangeOption.getCurrencyName
-        } по ${bestChangeOption.price} (${bestChangeOption.minSum} ${asset}/${(
-          bestChangeOption.minSum / bestChangeOption.price
-        ).toFixed(2)} USDT)\n\n${bestChangeOption.link}\n\n`;
-
-        const arbitrage = {
-          id: `${symbol}-${exchange}-${bestChangeOption.exchange.replace(/-/g, '')}`,
-          symbol,
-          tradePath,
-          exchange: bestChangeOption.exchange,
-          spread: parseFloat(parseFloat((spread - 1) * 100 - 0.1).toFixed(2)),
-          total: total.toFixed(2),
-        };
-
-        arbitrages.push(arbitrage);
       }
     });
 
