@@ -6,8 +6,20 @@ const axios = require('axios');
 const { CURRENCY_LIST } = require('../constants');
 
 class Bybit {
+  createSignature(data) {
+    return createHmac('sha256', process.env.BYBIT_API_SECRET).update(data).digest('hex');
+  }
+
   getSpotTradeLink(currency) {
     return `https://www.bybit.com/en/trade/spot/${currency}/USDT`;
+  }
+
+  getDepositLink() {
+    return 'https://www.bybit.com/user/assets/deposit';
+  }
+
+  getWithdrawLink() {
+    return 'https://www.bybit.com/user/assets/withdraw';
   }
 
   async getMarketData() {
@@ -23,7 +35,14 @@ class Bybit {
         .reduce(
           (acc, data) => ({
             ...acc,
-            [data.symbol]: { asset: data.asset, bidPrice: 0, askPrice: 0, spotLink: this.getSpotTradeLink(data.asset) },
+            [data.symbol]: {
+              asset: data.asset,
+              bidPrice: 0,
+              askPrice: 0,
+              spotLink: this.getSpotTradeLink(data.asset),
+              withdrawLink: this.getWithdrawLink(),
+              depositLink: this.getDepositLink(),
+            },
           }),
           {}
         );
@@ -39,9 +58,8 @@ class Bybit {
       const timestamp = Date.now();
       const recvWindow = 5000;
       const apiKey = process.env.BYBIT_API_KEY;
-      const signature = createHmac('sha256', process.env.BYBIT_API_SECRET)
-        .update(`${timestamp}${apiKey}${recvWindow}`)
-        .digest('hex');
+      const data = `${timestamp}${apiKey}${recvWindow}`;
+      const signature = this.createSignature(data);
       const url = 'https://api.bybit.com/v5/asset/coin/query-info';
 
       const { data: coinsInfo } = await axios.get(url, {
@@ -55,9 +73,12 @@ class Bybit {
 
       return coinsInfo.result.rows.reduce((acc, coinInfo) => ({
         ...acc,
-        [coinInfo.coin]: coinInfo.chains
-          .filter((network) => network.chainWithdraw === '1')
-          .map((network) => ({ name: network.chainType, fees: parseFloat(network.withdrawFee) })),
+        [coinInfo.coin]: coinInfo.chains.map((network) => ({
+          name: network.chainType,
+          fees: parseFloat(network.withdrawFee),
+          withdrawEnable: network.chainWithdraw === '1',
+          depositEnable: network.chainDeposit === '1',
+        })),
       }));
     } catch (err) {
       console.log(`Ошибка получения комиссий Bybit. ${err}`);

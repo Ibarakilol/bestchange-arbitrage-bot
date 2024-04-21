@@ -14,6 +14,14 @@ class Binance {
     return `https://www.binance.com/ru/trade/${currency}_USDT?type=spot`;
   }
 
+  getDepositLink(currency) {
+    return `https://www.binance.com/ru/my/wallet/account/main/deposit/crypto/${currency}`;
+  }
+
+  getWithdrawLink(currency) {
+    return `https://www.binance.com/ru/my/wallet/account/main/withdrawal/crypto/${currency}`;
+  }
+
   async getMarketData() {
     try {
       const { data: exchangeInfo } = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
@@ -27,7 +35,14 @@ class Binance {
         .reduce(
           (acc, data) => ({
             ...acc,
-            [data.symbol]: { asset: data.asset, bidPrice: 0, askPrice: 0, spotLink: this.getSpotTradeLink(data.asset) },
+            [data.symbol]: {
+              asset: data.asset,
+              bidPrice: 0,
+              askPrice: 0,
+              spotLink: this.getSpotTradeLink(data.asset),
+              withdrawLink: this.getWithdrawLink(data.asset),
+              depositLink: this.getDepositLink(data.asset),
+            },
           }),
           {}
         );
@@ -52,9 +67,12 @@ class Binance {
 
       return coinsInfo.reduce((acc, coinInfo) => ({
         ...acc,
-        [coinInfo.coin]: coinInfo.networkList
-          .filter((network) => network.withdrawEnable)
-          .map((network) => ({ name: network.name, fees: parseFloat(network.withdrawFee) })),
+        [coinInfo.coin]: coinInfo.networkList.map((network) => ({
+          name: network.name,
+          fees: parseFloat(network.withdrawFee),
+          withdrawEnable: network.withdrawEnable,
+          depositEnable: network.depositEnable,
+        })),
       }));
     } catch (err) {
       console.log(`Ошибка получения комиссий Binance. ${err}`);

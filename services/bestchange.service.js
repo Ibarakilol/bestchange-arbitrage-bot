@@ -84,7 +84,6 @@ class BestChangeService {
           const zip = new AdmZip(ZIP_PATH);
           zip.extractAllTo(DATA_PATH, true);
           fs.unlinkSync(ZIP_PATH);
-          console.log('Данные BestChange извлечены успешно.');
           resolve(this.parseBestChangeData());
         });
         writer.on('error', (err) => console.log(`Ошибка сохранения данных BestChange. ${err}`));
