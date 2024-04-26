@@ -14,6 +14,11 @@ class Binance {
     return `https://www.binance.com/ru/trade/${currency}_USDT?type=spot`;
   }
 
+  getFuturesTradeLink(symbol) {
+    const currency = symbol.split('USDT')[0];
+    return `https://www.binance.com/ru/futures/${currency}USDT`;
+  }
+
   getDepositLink(currency) {
     return `https://www.binance.com/ru/my/wallet/account/main/deposit/crypto/${currency}`;
   }

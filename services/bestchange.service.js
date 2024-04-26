@@ -42,8 +42,8 @@ class BestChangeService {
               giveCurrencyName: currencies[giveId].name,
               getCurrencyName: currencies[getId].name,
               exchange: exchanges[exchangeId].name,
-              price:
-                parseFloat(splitedLineData[3]) === 1 ? parseFloat(splitedLineData[4]) : parseFloat(splitedLineData[3]),
+              givePrice: parseFloat(splitedLineData[3]),
+              getPrice: parseFloat(splitedLineData[4]),
               minSum: parseFloat(splitedLineData[8]),
               maxSum: parseFloat(splitedLineData[9]),
               link: this.getExchangeLink(exchangeId, giveId, getId),

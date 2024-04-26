@@ -11,7 +11,12 @@ class Bybit {
   }
 
   getSpotTradeLink(currency) {
-    return `https://www.bybit.com/en/trade/spot/${currency}/USDT`;
+    return `https://www.bybit.com/ru-RU/trade/spot/${currency}/USDT`;
+  }
+
+  getFuturesTradeLink(symbol) {
+    const currency = symbol.split('USDT')[0];
+    return `https://www.bybit.com/trade/usdt/${currency}USDT`;
   }
 
   getDepositLink() {

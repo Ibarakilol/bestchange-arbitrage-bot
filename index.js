@@ -7,7 +7,7 @@ const { mapArbitrageToButton } = require('./adapters');
 const { getTimeString, sleep } = require('./utils');
 const { EXCHANGE_NAME } = require('./constants');
 
-const MIN_SPREAD = 0.2;
+const MIN_PROFIT = 0.5;
 const VOLUME = 2000;
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -40,7 +40,7 @@ async function parseExchangesData() {
 }
 
 function getArbitrageMessage(arbitrage) {
-  return `${arbitrage.tradePath}💰Спред: ${arbitrage.spread}%\nИтого: ${arbitrage.total} USDT`;
+  return `${arbitrage.tradePath}💰Профит: ${arbitrage.profit} USDT\nИтого: ${arbitrage.total} USDT`;
 }
 
 async function findArbitrages(marketData, feesData) {
@@ -65,9 +65,16 @@ async function findArbitrages(marketData, feesData) {
         if (symbol in bestChangeData) {
           const marketPrice = marketData[exchange][symbol].askPrice;
           const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.withdrawEnable);
-          const bestChangeOption = bestChangeData[symbol].sort((prev, next) => (prev.price < next.price ? -1 : 1))[0];
+          const bestChangeOption = bestChangeData[symbol].sort((prev, next) => {
+            if (prev.givePrice === 1 && next.givePrice === 1) {
+              return prev.getPrice > next.getPrice ? -1 : 1;
+            } else {
+              return prev.givePrice < next.givePrice ? -1 : 1;
+            }
+          })[0];
+          const bestChangeOptionPrice =
+            bestChangeOption.givePrice === 1 ? bestChangeOption.getPrice : bestChangeOption.givePrice;
 
-          let spread = 0;
           let total = 0;
           let tradePath = '';
           let withdrawFees = 0;
@@ -80,12 +87,9 @@ async function findArbitrages(marketData, feesData) {
             withdrawFees = bestFee.fees;
             withdrawMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
               bestFee.fees * marketPrice
-            ).toFixed(2)} USDT)${marketData[exchange][symbol].withdrawLink}\n`;
-          } else {
-            return;
+            ).toFixed(2)} USDT)\n${marketData[exchange][symbol].withdrawLink}\n`;
           }
 
-          spread = 1 / marketPrice;
           const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
           total = VOLUME / marketPrice - tradeFeePrice - withdrawFees;
           tradePath = `Обмен 1 на ${exchangeName}: USDT на ${asset} по ${marketPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n${withdrawMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\n\n`;
@@ -94,20 +98,16 @@ async function findArbitrages(marketData, feesData) {
             return;
           }
 
-          spread *= 1 / bestChangeOption.price;
-          total = total / bestChangeOption.price;
-          tradePath += `Обмен 2 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${
-            bestChangeOption.getCurrencyName
-          } по ${bestChangeOption.price} (${bestChangeOption.minSum} ${asset}/${(
-            bestChangeOption.minSum / bestChangeOption.price
-          ).toFixed(2)} USDT)\n\n${bestChangeOption.link}\n\n`;
+          total =
+            bestChangeOption.givePrice === 1 ? total * bestChangeOption.getPrice : total / bestChangeOption.givePrice;
+          tradePath += `Обмен 2 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${bestChangeOption.getCurrencyName} по ${bestChangeOptionPrice}\n\nСсылка: ${bestChangeOption.link}\n\n`;
 
           const arbitrage = {
             id: `${symbol}-${exchange}-${bestChangeOption.exchange.replace(/-/g, '')}`,
             symbol,
             tradePath,
             exchange: bestChangeOption.exchange,
-            spread: parseFloat(parseFloat((spread - 1) * 100 - 0.1).toFixed(2)),
+            profit: parseFloat((total - VOLUME).toFixed(2)),
             total: total.toFixed(2),
           };
 
@@ -117,15 +117,20 @@ async function findArbitrages(marketData, feesData) {
         if (reversedSymbol in bestChangeData) {
           const marketPrice = marketData[exchange][symbol].bidPrice;
           const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.depositEnable);
-          const bestChangeOption = bestChangeData[reversedSymbol].sort((prev, next) =>
-            prev.price > next.price ? -1 : 1
-          )[0];
+          const bestChangeOption = bestChangeData[reversedSymbol].sort((prev, next) => {
+            if (prev.givePrice === 1 && next.givePrice === 1) {
+              return prev.getPrice > next.getPrice ? -1 : 1;
+            } else {
+              return prev.givePrice < next.givePrice ? -1 : 1;
+            }
+          })[0];
+          const bestChangeOptionPrice =
+            bestChangeOption.givePrice === 1 ? bestChangeOption.getPrice : bestChangeOption.givePrice;
 
           if (bestChangeOption.minSum > VOLUME || bestChangeOption.maxSum < VOLUME) {
             return;
           }
 
-          let spread = 0;
           let total = 0;
           let tradePath = '';
           let depositMessage = '';
@@ -136,24 +141,15 @@ async function findArbitrages(marketData, feesData) {
             )[0];
             depositMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
               bestFee.fees * marketPrice
-            ).toFixed(2)} USDT)${marketData[exchange][symbol].depositLink}\n`;
-          } else {
-            return;
+            ).toFixed(2)} USDT)\n${marketData[exchange][symbol].depositLink}\n`;
           }
 
-          spread = 1 / bestChangeOption.price;
-          total = VOLUME / bestChangeOption.price;
-          tradePath = `Обмен 1 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${
-            bestChangeOption.getCurrencyName
-          } по ${bestChangeOption.price} (${bestChangeOption.minSum} ${asset}/${(
-            bestChangeOption.minSum / bestChangeOption.price
-          ).toFixed(2)} USDT)\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n\n${
-            bestChangeOption.link
-          }\n\n`;
+          total =
+            bestChangeOption.givePrice === 1 ? VOLUME * bestChangeOption.getPrice : VOLUME / bestChangeOption.givePrice;
+          tradePath = `Обмен 1 на ${bestChangeOption.exchange}: ${bestChangeOption.giveCurrencyName} на ${bestChangeOption.getCurrencyName} по ${bestChangeOptionPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n\nСсылка: ${bestChangeOption.link}\n\n`;
 
-          spread *= 1 / marketPrice;
-          const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
-          total = total / marketPrice - tradeFeePrice;
+          const tradeFeePrice = ((total * marketPrice) / 100) * 0.1;
+          total = total * marketPrice - tradeFeePrice;
           tradePath += `Обмен 2 на ${exchangeName}: ${asset} на USDT по ${marketPrice}\n${depositMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\n\n`;
 
           const arbitrage = {
@@ -161,7 +157,7 @@ async function findArbitrages(marketData, feesData) {
             symbol,
             tradePath,
             exchange: bestChangeOption.exchange,
-            spread: parseFloat(parseFloat((spread - 1) * 100 - 0.1).toFixed(2)),
+            profit: parseFloat((total - VOLUME).toFixed(2)),
             total: total.toFixed(2),
           };
 
@@ -171,10 +167,8 @@ async function findArbitrages(marketData, feesData) {
     });
 
     profitableArbitrages[exchange] = arbitrages
-      .filter(
-        (arbitrage) => !!arbitrage?.spread && arbitrage.spread >= MIN_SPREAD && parseFloat(arbitrage.total) > VOLUME
-      )
-      .sort((prev, next) => (prev.spread > next.spread ? -1 : 1));
+      .filter((arbitrage) => arbitrage.profit >= MIN_PROFIT)
+      .sort((prev, next) => (prev.profit > next.profit ? -1 : 1));
   }
 }
 
