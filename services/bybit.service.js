@@ -30,6 +30,9 @@ class Bybit {
   async getMarketData() {
     try {
       const { data: exchangeInfo } = await axios.get('https://api.bybit.com/v5/market/instruments-info?category=spot');
+      const { data: fundingRates } = await axios.get(
+        'https://api.bybit.com/derivatives/v3/public/tickers?category=linear'
+      );
 
       const filteredExchangeInfo = exchangeInfo.result.list
         .filter((symbolData) => symbolData.status === 'Trading' && symbolData.quoteCoin === 'USDT')
@@ -37,20 +40,24 @@ class Bybit {
 
       const pairsData = filteredExchangeInfo
         .filter((data) => CURRENCY_LIST.includes(data.asset))
-        .reduce(
-          (acc, data) => ({
+        .reduce((acc, data) => {
+          const futuresSymbol = fundingRates.result.list.find((fundingRate) =>
+            fundingRate.symbol.includes(data.symbol)
+          )?.symbol;
+
+          return {
             ...acc,
             [data.symbol]: {
               asset: data.asset,
               bidPrice: 0,
               askPrice: 0,
               spotLink: this.getSpotTradeLink(data.asset),
+              futuresLink: futuresSymbol ? this.getFuturesTradeLink(futuresSymbol) : '',
               withdrawLink: this.getWithdrawLink(),
               depositLink: this.getDepositLink(),
             },
-          }),
-          {}
-        );
+          };
+        }, {});
 
       return pairsData;
     } catch (err) {

@@ -30,6 +30,7 @@ class Binance {
   async getMarketData() {
     try {
       const { data: exchangeInfo } = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
+      const { data: fundingRates } = await axios.get('https://fapi.binance.com/fapi/v1/premiumIndex');
 
       const filteredExchangeInfo = exchangeInfo.symbols
         .filter((symbolData) => symbolData.status === 'TRADING' && symbolData.quoteAsset === 'USDT')
@@ -37,20 +38,22 @@ class Binance {
 
       const pairsData = filteredExchangeInfo
         .filter((data) => CURRENCY_LIST.includes(data.asset))
-        .reduce(
-          (acc, data) => ({
+        .reduce((acc, data) => {
+          const futuresSymbol = fundingRates.find((fundingRate) => fundingRate.symbol.includes(data.symbol))?.symbol;
+
+          return {
             ...acc,
             [data.symbol]: {
               asset: data.asset,
               bidPrice: 0,
               askPrice: 0,
               spotLink: this.getSpotTradeLink(data.asset),
+              futuresLink: futuresSymbol ? this.getFuturesTradeLink(futuresSymbol) : '',
               withdrawLink: this.getWithdrawLink(data.asset),
               depositLink: this.getDepositLink(data.asset),
             },
-          }),
-          {}
-        );
+          };
+        }, {});
 
       return pairsData;
     } catch (err) {
