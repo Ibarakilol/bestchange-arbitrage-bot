@@ -87,6 +87,7 @@ class Bybit {
         ...acc,
         [coinInfo.coin]: coinInfo.chains.map((network) => ({
           name: network.chainType,
+          network: network.chain,
           fees: parseFloat(network.withdrawFee),
           withdrawEnable: network.chainWithdraw === '1',
           depositEnable: network.chainDeposit === '1',

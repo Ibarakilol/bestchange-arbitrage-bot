@@ -7,7 +7,7 @@ const { mapArbitrageToButton } = require('./adapters');
 const { getTimeString, sleep } = require('./utils');
 const { EXCHANGE_NAME } = require('./constants');
 
-const MIN_PROFIT = 1;
+const MIN_PROFIT = 3;
 const VOLUME = 2000;
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -81,13 +81,22 @@ async function findArbitrages(marketData, feesData) {
           let withdrawMessage = '';
 
           if (currencyFees?.length) {
-            const bestFee = currencyFees.sort((prev, next) =>
-              prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
-            )[0];
-            withdrawFees = bestFee.fees;
-            withdrawMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
-              bestFee.fees * marketPrice
-            ).toFixed(2)} USDT)\n${marketData[exchange][symbol].withdrawLink}\n`;
+            const coinNetwork = currencyFees.find((currencyFee) => currencyFee.network === asset);
+
+            if (coinNetwork) {
+              withdrawFees = coinNetwork.fees;
+              withdrawMessage = `Сеть: ${coinNetwork.name}, комиссия: ${coinNetwork.fees} ${asset} (${(
+                coinNetwork.fees * marketPrice
+              ).toFixed(2)} USDT)\n${marketData[exchange][symbol].withdrawLink}\n`;
+            } else {
+              const bestFee = currencyFees.sort((prev, next) =>
+                prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
+              )[0];
+              withdrawFees = bestFee.fees;
+              withdrawMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
+                bestFee.fees * marketPrice
+              ).toFixed(2)} USDT)\n${marketData[exchange][symbol].withdrawLink}\n`;
+            }
           }
 
           const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
@@ -136,12 +145,20 @@ async function findArbitrages(marketData, feesData) {
           let depositMessage = '';
 
           if (currencyFees?.length) {
-            const bestFee = currencyFees.sort((prev, next) =>
-              prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
-            )[0];
-            depositMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
-              bestFee.fees * marketPrice
-            ).toFixed(2)} USDT)\n${marketData[exchange][symbol].depositLink}\n`;
+            const coinNetwork = currencyFees.find((currencyFee) => currencyFee.network === asset);
+
+            if (coinNetwork) {
+              depositMessage = `Сеть: ${coinNetwork.name}, комиссия: ${coinNetwork.fees} ${asset} (${(
+                coinNetwork.fees * marketPrice
+              ).toFixed(2)} USDT)\n${marketData[exchange][symbol].depositLink}\n`;
+            } else {
+              const bestFee = currencyFees.sort((prev, next) =>
+                prev.fees * marketPrice < next.fees * marketPrice ? -1 : 1
+              )[0];
+              depositMessage = `Сеть: ${bestFee.name}, комиссия: ${bestFee.fees} ${asset} (${(
+                bestFee.fees * marketPrice
+              ).toFixed(2)} USDT)\n${marketData[exchange][symbol].depositLink}\n`;
+            }
           }
 
           total =

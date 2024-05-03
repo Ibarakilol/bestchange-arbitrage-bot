@@ -77,6 +77,7 @@ class Binance {
         ...acc,
         [coinInfo.coin]: coinInfo.networkList.map((network) => ({
           name: network.name,
+          network: network.network,
           fees: parseFloat(network.withdrawFee),
           withdrawEnable: network.withdrawEnable,
           depositEnable: network.depositEnable,
