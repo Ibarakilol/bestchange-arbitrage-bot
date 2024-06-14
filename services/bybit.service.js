@@ -52,7 +52,7 @@ class Bybit {
               bidPrice: 0,
               askPrice: 0,
               spotLink: this.getSpotTradeLink(data.asset),
-              futuresLink: futuresSymbol ? this.getFuturesTradeLink(futuresSymbol) : '',
+              futuresLink: futuresSymbol ? this.getFuturesTradeLink(futuresSymbol) : null,
               withdrawLink: this.getWithdrawLink(),
               depositLink: this.getDepositLink(),
             },

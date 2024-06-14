@@ -8,7 +8,7 @@ const { getTimeString, sleep } = require('./utils');
 const { EXCHANGE_NAME } = require('./constants');
 
 const MIN_PROFIT = 3;
-const VOLUME = 2000;
+const VOLUME = 3000;
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
@@ -64,7 +64,7 @@ async function findArbitrages(marketData, feesData) {
 
         if (symbol in bestChangeData) {
           const marketPrice = marketData[exchange][symbol].askPrice;
-          const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.withdrawEnable);
+          const currencyFees = (feesData[exchange][asset] ?? []).filter((currencyFee) => currencyFee.withdrawEnable);
           const bestChangeOption = bestChangeData[symbol].sort((prev, next) => {
             if (prev.givePrice === 1 && next.givePrice === 1) {
               return prev.getPrice > next.getPrice ? -1 : 1;
@@ -80,7 +80,7 @@ async function findArbitrages(marketData, feesData) {
           let withdrawFees = 0;
           let withdrawMessage = '';
 
-          if (currencyFees?.length) {
+          if (currencyFees.length) {
             const coinNetwork = currencyFees.find((currencyFee) => currencyFee.network === asset);
 
             if (coinNetwork) {
@@ -101,7 +101,9 @@ async function findArbitrages(marketData, feesData) {
 
           const tradeFeePrice = (VOLUME / marketPrice / 100) * 0.1;
           total = VOLUME / marketPrice - tradeFeePrice - withdrawFees;
-          tradePath = `Обмен 1 на ${exchangeName}: USDT на ${asset} по ${marketPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n${withdrawMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\nХедж: ${marketData[exchange][symbol].futuresLink}\n\n`;
+          tradePath = `Обмен 1 на ${exchangeName}: USDT на ${asset} по ${marketPrice}\nК отдаче: ${VOLUME} USDT\nК получению: ≈${total} ${asset}\n${withdrawMessage}\nСпот: ${
+            marketData[exchange][symbol].spotLink
+          }${marketData[exchange][symbol].futuresLink && `\nХедж: ${marketData[exchange][symbol].futuresLink}`}\n\n`;
 
           if (bestChangeOption.minSum > total || bestChangeOption.maxSum < total) {
             return;
@@ -125,7 +127,7 @@ async function findArbitrages(marketData, feesData) {
 
         if (reversedSymbol in bestChangeData) {
           const marketPrice = marketData[exchange][symbol].bidPrice;
-          const currencyFees = feesData[exchange]?.[asset].filter((currencyFee) => currencyFee.depositEnable);
+          const currencyFees = (feesData[exchange][asset] ?? []).filter((currencyFee) => currencyFee.depositEnable);
           const bestChangeOption = bestChangeData[reversedSymbol].sort((prev, next) => {
             if (prev.givePrice === 1 && next.givePrice === 1) {
               return prev.getPrice > next.getPrice ? -1 : 1;
@@ -144,7 +146,7 @@ async function findArbitrages(marketData, feesData) {
           let tradePath = '';
           let depositMessage = '';
 
-          if (currencyFees?.length) {
+          if (currencyFees.length) {
             const coinNetwork = currencyFees.find((currencyFee) => currencyFee.network === asset);
 
             if (coinNetwork) {
@@ -167,7 +169,9 @@ async function findArbitrages(marketData, feesData) {
 
           const tradeFeePrice = ((total * marketPrice) / 100) * 0.1;
           total = total * marketPrice - tradeFeePrice;
-          tradePath += `Обмен 2 на ${exchangeName}: ${asset} на USDT по ${marketPrice}\n${depositMessage}\nСпот: ${marketData[exchange][symbol].spotLink}\nХедж: ${marketData[exchange][symbol].futuresLink}\n\n`;
+          tradePath += `Обмен 2 на ${exchangeName}: ${asset} на USDT по ${marketPrice}\n${depositMessage}\nСпот: ${
+            marketData[exchange][symbol].spotLink
+          }${marketData[exchange][symbol].futuresLink && `\nХедж: ${marketData[exchange][symbol].futuresLink}`}\n\n`;
 
           const arbitrage = {
             id: `${reversedSymbol}-${exchange}-${bestChangeOption.exchange.replace(/-/g, '')}`,
